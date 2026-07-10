@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # 1. Base de datos con soporte para Vectores (pgvector)
+  postgres-db:
+    image: pgvector/pgvector:pg16
+    container_name: proyecto_vector_db
+    environment:
+      POSTGRES_USER: dev_user
+      POSTGRES_PASSWORD: dev_password
+      POSTGRES_DB: proyecto_ai_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - ai-network
+    restart: unless-stopped
+
+  # 2. Motor de IA Local para Embeddings Gratuitos (Ollama)
+  ollama-service:
+    image: ollama/ollama:latest
+    container_name: proyecto_ollama_local
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_storage:/root/.ollama
+    networks:
+      - ai-network
+    restart: unless-stopped
+
+  # 3. Backend de la Aplicación (API y Orquestación TypeScript)
+  backend-app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: proyecto_backend_api
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      - postgres-db
+      - ollama-service
+    networks:
+      - ai-network
+    restart: unless-stopped
+
+  # 4. Frontend Preconstruido (Interfaz de Usuario)
+  frontend-ui:
+    image: nginx:alpine
+    container_name: proyecto_frontend_ui
+    ports:
+      - "8080:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    networks:
+      - ai-network
+    restart: unless-stopped
+
+networks:
+  ai-network:
+    driver: bridge
+
+volumes:
+  pgdata:
+  ollama_storage:

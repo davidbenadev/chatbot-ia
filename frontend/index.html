@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control - Agente IA RAG</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+
+<body class="bg-slate-900 text-slate-100 font-sans h-screen flex flex-col">
+
+    <header class="bg-slate-800 border-b border-slate-700 p-4 flex justify-between items-center shadow-md">
+        <div class="flex items-center space-x-3">
+            <div class="bg-indigo-600 p-2 rounded-lg text-white font-bold text-xl">🤖</div>
+            <h1 class="text-xl font-bold tracking-tight text-white">Agente Experto de Proyecto</h1>
+        </div>
+
+        <div class="flex items-center space-x-3 bg-slate-850 p-2 rounded-lg border border-slate-700">
+            <input type="file" id="pdfFile" accept=".pdf"
+                class="text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer">
+            <button onclick="subirPDF()" id="btnUpload"
+                class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md text-sm font-medium transition duration-200">Indexar
+                PDF</button>
+        </div>
+    </header>
+
+    <main class="flex-1 flex flex-col max-w-4xl w-full mx-auto p-4 overflow-hidden">
+
+        <div id="chatContainer"
+            class="flex-1 bg-slate-850 border border-slate-700 rounded-xl p-4 overflow-y-auto space-y-4 shadow-inner mb-4">
+            <div class="flex space-x-3 max-w-2xl">
+                <div class="bg-slate-700 text-white rounded-lg p-3 text-sm shadow">
+                    <p class="font-semibold text-xs text-indigo-400 mb-1">AGENTE SISTEMA</p>
+                    Hola, soy el asistente exclusivo del proyecto. Sube la documentación en formato PDF usando el panel
+                    superior y hazme cualquier duda técnica. No responderé preguntas fuera del dominio del proyecto.
+                </div>
+            </div>
+        </div>
+
+        <div class="flex space-x-3">
+            <input type="text" id="userInput" onkeypress="if(event.key === 'Enter') enviarMensaje()"
+                placeholder="Escribe tu duda técnica sobre el proyecto aquí..."
+                class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-slate-500 shadow">
+            <button onclick="enviarMensaje()" id="btnSend"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-medium transition duration-200 shadow">Enviar</button>
+        </div>
+    </main>
+
+    <script>
+        const API_URL = 'http://localhost:3000';
+        const chatContainer = document.getElementById('chatContainer');
+
+        function agregarMensaje(texto, esUsuario, tag = "TÚ") {
+            const wrapper = document.createElement('div');
+            wrapper.className = esUsuario ? "flex justify-end space-x-3" : "flex space-x-3 max-w-2xl";
+
+            const bgColor = esUsuario ? "bg-indigo-600 text-white" : "bg-slate-800 border border-slate-700 text-slate-200";
+            const tagColor = esUsuario ? "text-indigo-200" : "text-emerald-400";
+
+            wrapper.innerHTML = `
+        <div class="${bgColor} rounded-xl p-4 text-sm shadow-md">
+          <p class="font-bold text-[10px] ${tagColor} tracking-wider uppercase mb-1">${tag}</p>
+          <p class="whitespace-pre-line leading-relaxed">${texto}</p>
+        </div>
+      `;
+            chatContainer.appendChild(wrapper);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function subirPDF() {
+            const fileInput = document.getElementById('pdfFile');
+            const btnUpload = document.getElementById('btnUpload');
+            if (!fileInput.files[0]) return alert('Por favor, selecciona un archivo PDF primero.');
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            btnUpload.disabled = true;
+            btnUpload.innerText = 'Indexando...';
+            btnUpload.className = 'bg-slate-600 text-slate-400 px-4 py-2 rounded-md text-sm font-medium';
+
+            try {
+                const res = await fetch(`${API_URL}/upload`, { method: 'POST', body: formData });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(data.mensaje || 'PDF procesado exitosamente.');
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (err) {
+                alert('Error de conexión con el backend local.');
+            } finally {
+                btnUpload.disabled = false;
+                btnUpload.innerText = 'Indexar PDF';
+                btnUpload.className = 'bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md text-sm font-medium transition duration-200';
+            }
+        }
+
+        async function enviarMensaje() {
+            const input = document.getElementById('userInput');
+            const btnSend = document.getElementById('btnSend');
+            const mensaje = input.value.trim();
+            if (!mensaje) return;
+
+            input.value = '';
+            agregarMensaje(mensaje, true);
+
+            // Bloquear controles durante la inferencia híbrida
+            btnSend.disabled = true;
+            btnSend.innerText = '...';
+
+            try {
+                const res = await fetch(`${API_URL}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: mensaje })
+                });
+                const data = await res.json();
+
+                agregarMensaje(data.response, false, "AGENTE IA");
+            } catch (err) {
+                agregarMensaje("Error al conectar con el servidor backend corporativo.", false, "ERROR");
+            } finally {
+                btnSend.disabled = false;
+                btnSend.innerText = 'Enviar';
+            }
+        }
+    </script>
+</body>
+
+</html>
